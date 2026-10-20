@@ -1,65 +1,79 @@
 #include <Geode/Geode.hpp>
-#include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/PlayLayer.hpp>
 
 using namespace geode::prelude;
 
-class $modify(BufferPlayer, PlayerObject) {
+class $modify(MyPlayLayer, PlayLayer) {
     struct Fields {
-        int m_bufferTicks = 0;
-        bool m_isSimulatingClick = false;
+        int m_delayedTicks = 0;
+        bool m_isSimulated = false;
+        CCPoint m_savedTouchPos;
     };
 
-    void pushButton(PlayerButton button) {
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+
+        // Визуальная плашка: если мод загружен, ты УВИДИШЬ этот текст при старте уровня
+        auto label = CCLabelBMFont::create("BUFFER MOD ACTIVE", "bigFont.fnt");
+        label->setPosition({ CCDirector::sharedDirector()->getWinSize().width / 2, 280.f });
+        label->setScale(0.6f);
+        label->setColor({ 0, 255, 0 });
+        label->setTag(9999);
+        this->addChild(label, 100);
+
+        return true;
+    }
+
+    bool ccTouchBegan(CCTouch* touch, CCEvent* event) {
+        // Если это наш собственный программный клик — даём игре его обработать
+        if (m_fields->m_isSimulated) {
+            return PlayLayer::ccTouchBegan(touch, event);
+        }
+
         bool isEnabled = Mod::get()->getSettingValue<bool>("enabled");
-
-        // Если это наш программный клик из буфера — просто выполняем его
-        if (m_fields->m_isSimulatingClick || !isEnabled) {
-            PlayerObject::pushButton(button);
-            return;
+        if (!isEnabled) {
+            return PlayLayer::ccTouchBegan(touch, event);
         }
 
-        // Если игрок физически нажал кнопку прыжка
-        if (button == PlayerButton::Jump) {
-            int64_t delay = Mod::get()->getSettingValue<int64_t>("delay");
-            
-            // Если задержка выставлена в 0 или 1 тик — отдаем сразу
-            if (delay <= 1) {
-                PlayerObject::pushButton(button);
-                return;
-            }
+        int64_t delay = Mod::get()->getSettingValue<int64_t>("delay");
+        
+        // Запоминаем точку тача и взводим задержку
+        m_fields->m_savedTouchPos = touch->getLocation();
+        m_fields->m_delayedTicks = static_cast<int>(delay);
 
-            // Иначе задерживаем выполнение клика на заданное число тиков
-            m_fields->m_bufferTicks = static_cast<int>(delay);
-            
-            // Визуальный маркер для проверки: красим куб на мгновение
-            // (если куб моргает — мод 100% работает и перехватывает клики!)
-            this->setColor({ 255, 0, 0 }); 
-            return; // Глушим раннее нажатие прямо сейчас!
+        // Мигаем надписью красным при перехвате тача
+        if (auto label = this->getChildByTag(9999)) {
+            static_cast<CCLabelBMFont*>(label)->setColor({ 255, 0, 0 });
         }
 
-        PlayerObject::pushButton(button);
+        // ВОЗВРАЩАЕМ FALSE: игра ДУМАЕТ, ЧТО ТАЧА НЕ БЫЛО ВООБЩЕ!
+        return false;
     }
 
     void update(float dt) {
-        PlayerObject::update(dt);
+        PlayLayer::update(dt);
 
-        // Тикаем буфер задержки
-        if (m_fields->m_bufferTicks > 0) {
-            m_fields->m_bufferTicks--;
+        if (m_fields->m_delayedTicks > 0) {
+            m_fields->m_delayedTicks--;
 
-            if (m_fields->m_bufferTicks == 0) {
-                // Время вышло: применяем сдвинутый клик в игру
-                m_fields->m_isSimulatingClick = true;
-                this->pushButton(PlayerButton::Jump);
-                m_fields->m_isSimulatingClick = false;
+            if (m_fields->m_delayedTicks == 0) {
+                // Возвращаем надпись в зеленый
+                if (auto label = this->getChildByTag(9999)) {
+                    static_cast<CCLabelBMFont*>(label)->setColor({ 0, 255, 0 });
+                }
 
-                // Возвращаем цвет обратно в белый
-                this->setColor({ 255, 255, 255 });
+                // Симулируем нажатие прыжка напрямую первому игроку
+                if (m_player1) {
+                    m_fields->m_isSimulated = true;
+                    // В GD 2.2 базовый прыжок куба/волны из слоя вызывается так:
+                    this->pushButton(1, true);
+                    m_fields->m_isSimulated = false;
+                }
             }
         }
     }
 };
 
 $on_mod(Loaded) {
-    log::info("Direct PlayerObject Input Buffer loaded!");
+    log::info("Touch-level Input Buffer Hook Loaded!");
 }
