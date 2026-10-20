@@ -10,28 +10,33 @@ class $modify(MyPlayLayer, PlayLayer) {
         bool m_preventDeath = false;
     };
 
-    void handleButton(bool down, PlayerButton button, bool isPlayer2) {
-        // Ловим нажатие прыжка первого игрока
-        if (down && button == PlayerButton::Jump && !isPlayer2) {
+    void handleButton(bool down, int button, bool isPlayer1) {
+        // Кнопка 1 — это прыжок
+        if (down && button == 1 && isPlayer1) {
             m_fields->m_graceTicks = 4;
         }
 
-        PlayLayer::handleButton(down, button, isPlayer2);
+        PlayLayer::handleButton(down, button, isPlayer1);
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
-        // Если смерть наступила в окне раннего нажатия
-        if (m_fields->m_graceTicks > 0 && !m_fields->m_preventDeath) {
-            log::info("Early Click Buffer: Смерть предотвращена, переносим клик.");
+        // Если смерть наступила сразу после нажатия или пока ждём отложенный клик
+        if ((m_fields->m_graceTicks > 0 || m_fields->m_delayedClickTicks > 0) && !m_fields->m_preventDeath) {
+            log::info("Early Click Buffer: Перехватили раннюю смерть! Сдвигаем ввод.");
 
             m_fields->m_preventDeath = true;
             m_fields->m_graceTicks = 0;
 
-            // Сдвигаем клик на 2 тика вперед
+            // Задержка в 2 физических тика до целевого окна
             m_fields->m_delayedClickTicks = 2;
 
-            // Отпускаем кнопку, чтобы снять преждевременный импульс
-            PlayLayer::handleButton(false, PlayerButton::Jump, false);
+            // Сбрасываем нажатие, чтобы не удерживать фатальный прыжок
+            PlayLayer::handleButton(false, 1, true);
+            return;
+        }
+
+        // Если активен защитный период сдвига — не даём шипам убить куб
+        if (m_fields->m_delayedClickTicks > 0) {
             return;
         }
 
@@ -48,8 +53,9 @@ class $modify(MyPlayLayer, PlayLayer) {
         if (m_fields->m_delayedClickTicks > 0) {
             m_fields->m_delayedClickTicks--;
             if (m_fields->m_delayedClickTicks == 0) {
-                log::info("Early Click Buffer: Выполняем сдвинутый прыжок.");
-                this->handleButton(true, PlayerButton::Jump, false);
+                log::info("Early Click Buffer: Прожимаем клик в безопасном окне.");
+                // Имитируем нажатие кнопки 1
+                this->handleButton(true, 1, true);
                 m_fields->m_preventDeath = false;
             }
         }
