@@ -15,20 +15,16 @@
   "settings": {
     "enabled": {
       "name": "Enable Input Buffer",
-      "description": "Включить или отключить работу буфера",
       "type": "bool",
       "default": true
     },
     "delay": {
-      "name": "Buffer Delay (Ticks)",
-      "description": "Окно буфера в физических тиках (240 тиков = 1 сек)",
+      "name": "Buffer Delay",
+      "description": "Input delay in frames",
       "type": "int",
-      "default": 8,
+      "default": 2,
       "min": 1,
-      "max": 30,
-      "control": {
-        "slider": true
-      }
+      "max": 4
     }
   }
 }
