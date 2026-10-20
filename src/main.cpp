@@ -17,13 +17,13 @@ class $modify(DynamicPlayLayer, PlayLayer) {
         // Если смерть была вызвана во время виртуальной проверки
         if (m_fields->m_isSimulating) {
             m_fields->m_simulatedDeath = true;
-            return; // Не даём игре убить персонажа по-настоящему
+            return; // Глушим реальное уничтожение персонажа
         }
 
         PlayLayer::destroyPlayer(player, object);
     }
 
-    // Проверяем наперёд: приведёт ли прыжок прямо сейчас к гибели?
+    // Проверяем: убьет ли прыжок прямо в текущем положении?
     bool wouldDieIfJumpNow() {
         if (!m_player1) return false;
 
@@ -35,16 +35,16 @@ class $modify(DynamicPlayLayer, PlayLayer) {
         m_fields->m_isSimulating = true;
         m_fields->m_simulatedDeath = false;
 
-        // Пробуем совершить прыжок
+        // Пробуем нажать прыжок
         m_player1->pushButton(PlayerButton::Jump);
 
-        // Принудительно запускаем проверку коллизий для первого игрока
-        this->checkCollisions(m_player1, 0.0f);
+        // Проверяем коллизии (передаем 3 аргумента: игрок, dt, ignoreDamage = false)
+        this->checkCollisions(m_player1, 0.0f, false);
 
-        // Фиксируем результат
+        // Запоминаем результат проверки
         bool willDie = m_fields->m_simulatedDeath;
 
-        // Моментально восстанавливаем исходное состояние
+        // Откатываем параметры куба назад в исходное состояние
         m_player1->releaseButton(PlayerButton::Jump);
         m_player1->setPosition(savedPos);
         m_player1->m_yVelocity = savedYVel;
@@ -58,13 +58,13 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     }
 
     void handleButton(bool down, int button, bool isPlayer1) {
-        // Ловим нажатие прыжка первого игрока
+        // Ловим клик прыжка первого игрока
         if (down && button == 1 && isPlayer1) {
-            // Если прыжок в текущем тике смертелен (слишком рано)
+            // Если клик в текущем тике смертелен (слишком рано)
             if (this->wouldDieIfJumpNow()) {
                 log::info("Dynamic: Ранний клик опасен! Откладываем до безопасного окна.");
                 m_fields->m_scheduledTicksLeft = MAX_DYNAMIC_LOOKAHEAD;
-                return; // Подавляем клик: куб продолжает безопасный полёт
+                return; // Подавляем клик прямо сейчас
             }
         }
 
@@ -72,17 +72,17 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     }
 
     void update(float dt) {
-        // Если в очереди висит подавленный ранний клик — проверяем каждый тик
+        // Если в очереди висит отложенный ранний клик
         if (m_fields->m_scheduledTicksLeft > 0) {
             m_fields->m_scheduledTicksLeft--;
 
-            // Если прямо в текущем тике прыгать уже безопасно
+            // Проверяем, безопасно ли прыгать в текущем тике
             if (!this->wouldDieIfJumpNow()) {
-                log::info("Dynamic: Безопасное окно найдено! Выполняем идеальный клик.");
+                log::info("Dynamic: Безопасное окно открылось! Выполняем идеальный прыжок.");
                 m_fields->m_scheduledTicksLeft = -1;
                 this->handleButton(true, 1, true);
             } else if (m_fields->m_scheduledTicksLeft == 0) {
-                // Если за все 8 тиков безопасного окна так и не появилось
+                // Если за все 8 тиков безопасного положения не возникло
                 log::info("Dynamic: Окно истекло, безопасная траектория не найдена.");
                 m_fields->m_scheduledTicksLeft = -1;
             }
