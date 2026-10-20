@@ -42,8 +42,8 @@ class $modify(DynamicPlayLayer, PlayLayer) {
             float lift = 8.0f * gravitySign;
             m_player1->setPosition({ savedPos.x + 5.0f, savedPos.y + lift });
         }
-        // 3. Шар / Паук (Roll / Spider)
-        else if (m_player1->m_isRoll || m_player1->m_isSpider) {
+        // 3. Шар / Паук (Ball / Spider)
+        else if (m_player1->m_isBall || m_player1->m_isSpider) {
             float flipStep = 12.0f * (-gravitySign);
             m_player1->setPosition({ savedPos.x + 4.0f, savedPos.y + flipStep });
         }
@@ -58,7 +58,7 @@ class $modify(DynamicPlayLayer, PlayLayer) {
         bool willDie = m_fields->m_simulatedDeath;
 
         // Откатываем состояние игрока
-        if (!m_player1->m_isDart && !m_player1->m_isShip && !m_player1->m_isBird && !m_player1->m_isRoll && !m_player1->m_isSpider) {
+        if (!m_player1->m_isDart && !m_player1->m_isShip && !m_player1->m_isBird && !m_player1->m_isBall && !m_player1->m_isSpider) {
             m_player1->releaseButton(PlayerButton::Jump);
         }
         m_player1->setPosition(savedPos);
@@ -75,13 +75,11 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     void handleButton(bool down, int button, bool isPlayer1) {
         bool isEnabled = Mod::get()->getSettingValue<bool>("enabled");
 
-        // Если включен мод, зажат прыжок первого игрока
         if (isEnabled && down && button == 1 && isPlayer1) {
             if (this->wouldDieIfJumpNow()) {
-                // Считываем задержку из настройки "delay" (в int64_t)
                 int64_t delayFrames = Mod::get()->getSettingValue<int64_t>("delay");
                 m_fields->m_scheduledTicksLeft = static_cast<int>(delayFrames);
-                return; // Подавляем смертельный ранний ввод
+                return;
             }
         }
 
@@ -92,12 +90,10 @@ class $modify(DynamicPlayLayer, PlayLayer) {
         if (m_fields->m_scheduledTicksLeft > 0) {
             m_fields->m_scheduledTicksLeft--;
 
-            // Как только в текущем тике коридор безопасен — прыгаем
             if (!this->wouldDieIfJumpNow()) {
                 m_fields->m_scheduledTicksLeft = -1;
                 this->handleButton(true, 1, true);
             } else if (m_fields->m_scheduledTicksLeft == 0) {
-                // Задержка истекла, безопасного окна так и не открылось
                 m_fields->m_scheduledTicksLeft = -1;
             }
         }
