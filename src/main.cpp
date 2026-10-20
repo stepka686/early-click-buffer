@@ -1,66 +1,63 @@
 #include <Geode/Geode.hpp>
-#include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 
 using namespace geode::prelude;
 
-class $modify(MyPlayerObject, PlayerObject) {
+class $modify(MyBaseGameLayer, GJBaseGameLayer) {
     struct Fields {
-        // Сколько физических тиков клик считается "свежим" для спасения
         int m_graceTicks = 0;
-        // Запланированный клик, который нужно нажать позже
         int m_delayedClickTicks = 0;
-        // Защита от бесконечного цикла отмены смерти
-        bool m_isSafeFromEarlyDeath = false;
+        bool m_preventDeath = false;
     };
 
-    void pushButton(PlayerButton btn) {
-        if (btn == PlayerButton::Jump) {
-            // Засекаем 3 физических тика окна "раннего" клика
-            m_fields->m_graceTicks = 3;
+    void handleButton(bool down, int button, bool isPlayer2) {
+        // Ловим нажатие прыжка первого игрока (кнопка 1)
+        if (down && button == 1 && !isPlayer2) {
+            // Даем окно в 4 физических тика на проверку ранней смерти
+            m_fields->m_graceTicks = 4;
         }
-        PlayerObject::pushButton(btn);
+
+        GJBaseGameLayer::handleButton(down, button, isPlayer2);
     }
 
-    void playerDestroyed(bool p0) {
-        // Если игрок умер в течение 3 тиков после нажатия прыжка
-        if (m_fields->m_graceTicks > 0 && !m_fields->m_isSafeFromEarlyDeath) {
-            log::info("Спасли от ранней смерти! Сдвигаем клик дальше.");
-            
-            // Отменяем смерть
-            m_fields->m_isSafeFromEarlyDeath = true;
+    void destroyPlayer(PlayerObject* player, GameObject* object) {
+        // Если смерть произошла сразу после нажатия кнопки
+        if (m_fields->m_graceTicks > 0 && !m_fields->m_preventDeath) {
+            log::info("Early Click Buffer: Смерть перехвачена! Сдвигаем ввод.");
+
+            m_fields->m_preventDeath = true;
             m_fields->m_graceTicks = 0;
 
-            // Откладываем прыжок на 2 тика вперёд (то самое окно)
+            // Откладываем выполнение клика на 2 тика вперед
             m_fields->m_delayedClickTicks = 2;
 
-            // Сбрасываем текущий зажатый прыжок, чтобы не залипал в потолке
-            this->releaseButton(PlayerButton::Jump);
+            // Принудительно отпускаем кнопку, чтобы сбросить неудачный прыжок
+            GJBaseGameLayer::handleButton(false, 1, false);
             return;
         }
 
-        PlayerObject::playerDestroyed(p0);
+        GJBaseGameLayer::destroyPlayer(player, object);
     }
 
     void update(float dt) {
-        PlayerObject::update(dt);
+        GJBaseGameLayer::update(dt);
 
-        // Уменьшаем окно проверки раннего клика
         if (m_fields->m_graceTicks > 0) {
             m_fields->m_graceTicks--;
         }
 
-        // Если есть отложенный клик — ждём нужный тик и жмём
         if (m_fields->m_delayedClickTicks > 0) {
             m_fields->m_delayedClickTicks--;
             if (m_fields->m_delayedClickTicks == 0) {
-                log::info("Применяем отложенный клик в допустимое окно.");
-                this->pushButton(PlayerButton::Jump);
-                m_fields->m_isSafeFromEarlyDeath = false;
+                log::info("Early Click Buffer: Прожимаем сдвинутый клик.");
+                // Полноценно симулируем нажатие кнопки через движок игры
+                this->handleButton(true, 1, false);
+                m_fields->m_preventDeath = false;
             }
         }
     }
 };
 
 $on_mod(Loaded) {
-    log::info("Early Click Buffer loaded!");
+    log::info("Early Click Buffer loaded successfully!");
 }
