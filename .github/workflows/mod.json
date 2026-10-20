@@ -1,0 +1,15 @@
+{
+  "geode": "v5.11.2",
+  "gd": {
+    "android": "2.2144"
+  },
+  "id": "earlyclick.buffer",
+  "name": "Early Click Buffer",
+  "version": "v1.0.0",
+  "developer": "EarlyClickDev",
+  "description": "Experimental early input buffering for Geometry Dash.",
+  "tags": [
+    "gameplay",
+    "utility"
+  ]
+}
