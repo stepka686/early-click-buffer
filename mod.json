@@ -18,13 +18,16 @@
       "type": "bool",
       "default": true
     },
-    "delay": {
-      "name": "Buffer Delay",
-      "description": "Input delay in frames",
-      "type": "int",
-      "default": 2,
-      "min": 1,
-      "max": 4
-    }
+"delay": {
+  "name": "Buffer Delay",
+  "description": "Input delay in frames (1-30)",
+  "type": "int",
+  "default": 2,
+  "min": 1,
+  "max": 30,
+  "control": {
+    "slider": true,
+    "slider-step": 1,
+    "input": true
   }
 }
