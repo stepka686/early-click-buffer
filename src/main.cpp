@@ -3,9 +3,6 @@
 
 using namespace geode::prelude;
 
-// Окно поиска безопасного кадра (8 физических шагов)
-constexpr int MAX_DYNAMIC_LOOKAHEAD = 8;
-
 class $modify(DynamicPlayLayer, PlayLayer) {
     struct Fields {
         int m_scheduledTicksLeft = -1;
@@ -14,20 +11,17 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     };
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
-        // Если смерть была вызвана во время виртуальной проверки
         if (m_fields->m_isSimulating) {
             m_fields->m_simulatedDeath = true;
-            return; // Глушим реальное уничтожение персонажа
+            return;
         }
-
         PlayLayer::destroyPlayer(player, object);
     }
 
-    // Проверяем: убьет ли прыжок прямо в текущем положении?
+    // Универсальная симуляция столкновений для всех режимов игры
     bool wouldDieIfJumpNow() {
         if (!m_player1) return false;
 
-        // Сохраняем физическое состояние куба
         auto savedPos = m_player1->getPosition();
         auto savedYVel = m_player1->m_yVelocity;
         auto savedRotation = m_player1->getRotation();
@@ -35,17 +29,38 @@ class $modify(DynamicPlayLayer, PlayLayer) {
         m_fields->m_isSimulating = true;
         m_fields->m_simulatedDeath = false;
 
-        // Пробуем нажать прыжок
-        m_player1->pushButton(PlayerButton::Jump);
+        float gravitySign = m_player1->m_isUpsideDown ? -1.0f : 1.0f;
 
-        // Проверяем коллизии (передаем 3 аргумента: игрок, dt, ignoreDamage = false)
+        // 1. Волна (Dart)
+        if (m_player1->m_isDart) {
+            float forwardStep = 10.0f;
+            float verticalStep = 10.0f * gravitySign;
+            m_player1->setPosition({ savedPos.x + forwardStep, savedPos.y + verticalStep });
+        }
+        // 2. Корабль / НЛО (Ship / Bird)
+        else if (m_player1->m_isShip || m_player1->m_isBird) {
+            float lift = 8.0f * gravitySign;
+            m_player1->setPosition({ savedPos.x + 5.0f, savedPos.y + lift });
+        }
+        // 3. Шар / Паук (Roll / Spider)
+        else if (m_player1->m_isRoll || m_player1->m_isSpider) {
+            float flipStep = 12.0f * (-gravitySign);
+            m_player1->setPosition({ savedPos.x + 4.0f, savedPos.y + flipStep });
+        }
+        // 4. Обычный куб (Cube)
+        else {
+            m_player1->pushButton(PlayerButton::Jump);
+        }
+
+        // Проверяем коллизии в виртуальной точке
         this->checkCollisions(m_player1, 0.0f, false);
 
-        // Запоминаем результат проверки
         bool willDie = m_fields->m_simulatedDeath;
 
-        // Откатываем параметры куба назад в исходное состояние
-        m_player1->releaseButton(PlayerButton::Jump);
+        // Откатываем состояние игрока
+        if (!m_player1->m_isDart && !m_player1->m_isShip && !m_player1->m_isBird && !m_player1->m_isRoll && !m_player1->m_isSpider) {
+            m_player1->releaseButton(PlayerButton::Jump);
+        }
         m_player1->setPosition(savedPos);
         m_player1->m_yVelocity = savedYVel;
         m_player1->setRotation(savedRotation);
@@ -58,13 +73,15 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     }
 
     void handleButton(bool down, int button, bool isPlayer1) {
-        // Ловим клик прыжка первого игрока
-        if (down && button == 1 && isPlayer1) {
-            // Если клик в текущем тике смертелен (слишком рано)
+        bool isEnabled = Mod::get()->getSettingValue<bool>("enabled");
+
+        // Если включен мод, зажат прыжок первого игрока
+        if (isEnabled && down && button == 1 && isPlayer1) {
             if (this->wouldDieIfJumpNow()) {
-                log::info("Dynamic: Ранний клик опасен! Откладываем до безопасного окна.");
-                m_fields->m_scheduledTicksLeft = MAX_DYNAMIC_LOOKAHEAD;
-                return; // Подавляем клик прямо сейчас
+                // Считываем задержку из настройки "delay" (в int64_t)
+                int64_t delayFrames = Mod::get()->getSettingValue<int64_t>("delay");
+                m_fields->m_scheduledTicksLeft = static_cast<int>(delayFrames);
+                return; // Подавляем смертельный ранний ввод
             }
         }
 
@@ -72,18 +89,15 @@ class $modify(DynamicPlayLayer, PlayLayer) {
     }
 
     void update(float dt) {
-        // Если в очереди висит отложенный ранний клик
         if (m_fields->m_scheduledTicksLeft > 0) {
             m_fields->m_scheduledTicksLeft--;
 
-            // Проверяем, безопасно ли прыгать в текущем тике
+            // Как только в текущем тике коридор безопасен — прыгаем
             if (!this->wouldDieIfJumpNow()) {
-                log::info("Dynamic: Безопасное окно открылось! Выполняем идеальный прыжок.");
                 m_fields->m_scheduledTicksLeft = -1;
                 this->handleButton(true, 1, true);
             } else if (m_fields->m_scheduledTicksLeft == 0) {
-                // Если за все 8 тиков безопасного положения не возникло
-                log::info("Dynamic: Окно истекло, безопасная траектория не найдена.");
+                // Задержка истекла, безопасного окна так и не открылось
                 m_fields->m_scheduledTicksLeft = -1;
             }
         }
@@ -93,5 +107,5 @@ class $modify(DynamicPlayLayer, PlayLayer) {
 };
 
 $on_mod(Loaded) {
-    log::info("Dynamic Click Aligner (Lookahead) loaded!");
+    log::info("Early Click Buffer loaded with custom settings!");
 }
