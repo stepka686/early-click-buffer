@@ -1,4 +1,3 @@
-
 {
   "geode": "5.11.2",
   "gd": {
@@ -6,9 +5,9 @@
   },
   "id": "earlyclick.buffer",
   "name": "Early Click Buffer",
-  "version": "v1.0.0",
+  "version": "v1.1.0",
   "developer": "EarlyClickDev",
-  "description": "Experimental configurable input buffer for Geometry Dash.",
+  "description": "Configurable early jump input buffer for Geometry Dash.",
   "tags": [
     "gameplay",
     "utility"
@@ -16,15 +15,15 @@
   "settings": {
     "enabled": {
       "name": "Enable Input Buffer",
-      "description": "Enable or disable input buffering.",
+      "description": "Enable or disable the early input buffer.",
       "type": "bool",
       "default": true
     },
-    "delay": {
-      "name": "Buffer Delay",
-      "description": "Input delay in frames, from 1 to 30.",
+    "buffer_frames": {
+      "name": "Buffer Window",
+      "description": "Maximum number of frames to buffer an early jump.",
       "type": "int",
-      "default": 2,
+      "default": 8,
       "min": 1,
       "max": 30
     }
